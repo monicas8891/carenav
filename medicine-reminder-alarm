@@ -1,0 +1,562 @@
+// Required Libraries
+#include <Wire.h>
+#include <RTClib.h>
+#include <LiquidCrystal_I2C.h>
+
+// --- Hardware Definitions ---
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Try 0x3F if 0x27 doesn't work
+RTC_DS3231 rtc;
+
+// Button Pins
+#define MODE_BUTTON 2
+#define UP_BUTTON 3
+#define DOWN_BUTTON 4
+#define OK_BUTTON 5
+#define BUZZER_PIN 8
+
+// --- System Variables ---
+enum SystemMode {
+  CLOCK_DISPLAY,
+  SET_CURRENT_HOUR,
+  SET_CURRENT_MINUTE,
+  SET_ALARM_HOUR,
+  SET_ALARM_MINUTE,
+  SET_ALARM_ONOFF,
+  ALARM_RINGING
+};
+
+SystemMode currentMode = CLOCK_DISPLAY;
+int selectedAlarm = 0;  // 0, 1, or 2
+
+// Time variables - SEPARATE variables for setting mode
+int currentHour = 12;
+int currentMinute = 0;
+int currentSecond = 0;
+
+// TEMPORARY variables for time setting (won't be overwritten by RTC)
+int tempHour = 12;
+int tempMinute = 0;
+
+// Alarm structure for 3 slots
+struct Alarm {
+  int hour;
+  int minute;
+  bool isActive;
+  String name;
+};
+
+Alarm alarms[3] = {
+  {8, 0, false, "Medicine 1"},
+  {14, 0, false, "Medicine 2"},
+  {20, 0, false, "Medicine 3"}
+};
+
+// Button timing
+unsigned long lastButtonPress = 0;
+const unsigned long debounceDelay = 300;
+
+// Display control
+unsigned long lastDisplayUpdate = 0;
+unsigned long lastBlink = 0;
+bool blinkState = true;
+
+// --- Setup Function ---
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+  Serial.println("=== MEDICINE ALARM CLOCK ===");
+  
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Starting...");
+  delay(1000);
+  
+  // Initialize RTC
+  if (!rtc.begin()) {
+    Serial.println("RTC ERROR!");
+    lcd.clear();
+    lcd.print("RTC Error!");
+    while(1);
+  }
+  Serial.println("RTC OK");
+  
+  // Initialize buttons
+  pinMode(MODE_BUTTON, INPUT_PULLUP);
+  pinMode(UP_BUTTON, INPUT_PULLUP);
+  pinMode(DOWN_BUTTON, INPUT_PULLUP);
+  pinMode(OK_BUTTON, INPUT_PULLUP);
+  
+  // Initialize buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+  
+  // Get time from RTC
+  DateTime now = rtc.now();
+  currentHour = now.hour();
+  currentMinute = now.minute();
+  currentSecond = now.second();
+  
+  // Initialize temp variables with current time
+  tempHour = currentHour;
+  tempMinute = currentMinute;
+  
+  Serial.print("Time from RTC: ");
+  Serial.print(currentHour);
+  Serial.print(":");
+  Serial.print(currentMinute);
+  Serial.print(":");
+  Serial.println(currentSecond);
+  
+  lcd.clear();
+  Serial.println("System Ready");
+}
+
+// --- Button Function ---
+bool buttonPressed(int pin) {
+  if (digitalRead(pin) == LOW) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonPress > debounceDelay) {
+      lastButtonPress = currentTime;
+      delay(150);  // Simple debounce
+      return true;
+    }
+  }
+  return false;
+}
+
+// --- Display Functions ---
+void displayClock() {
+  lcd.setCursor(0, 0);
+  lcd.print("Time: ");
+  
+  // Hour
+  if (currentHour < 10) lcd.print("0");
+  lcd.print(currentHour);
+  lcd.print(":");
+  
+  // Minute
+  if (currentMinute < 10) lcd.print("0");
+  lcd.print(currentMinute);
+  lcd.print(":");
+  
+  // Second
+  if (currentSecond < 10) lcd.print("0");
+  lcd.print(currentSecond);
+  
+  // AM/PM
+  lcd.print(" ");
+  if (currentHour < 12) lcd.print("AM");
+  else lcd.print("PM");
+  
+  // Bottom line
+  lcd.setCursor(0, 1);
+  lcd.print("A");
+  lcd.print(selectedAlarm + 1);
+  lcd.print(":");
+  
+  if (alarms[selectedAlarm].isActive) {
+    lcd.print("ON ");
+    if (alarms[selectedAlarm].hour < 10) lcd.print("0");
+    lcd.print(alarms[selectedAlarm].hour);
+    lcd.print(":");
+    if (alarms[selectedAlarm].minute < 10) lcd.print("0");
+    lcd.print(alarms[selectedAlarm].minute);
+    lcd.print("   ");
+  } else {
+    lcd.print("OFF           ");
+  }
+}
+
+void displaySetCurrentHour() {
+  lcd.setCursor(0, 0);
+  lcd.print("Set Clock Hour: ");
+  
+  lcd.setCursor(0, 1);
+  if (blinkState) {
+    lcd.print(">");
+  } else {
+    lcd.print(" ");
+  }
+  
+  lcd.print(" ");
+  if (tempHour < 10) lcd.print("0");  // Use tempHour, not currentHour
+  lcd.print(tempHour);
+  lcd.print(":00  OK=Next");
+}
+
+void displaySetCurrentMinute() {
+  lcd.setCursor(0, 0);
+  lcd.print("Set Clock Min:  ");
+  
+  lcd.setCursor(0, 1);
+  lcd.print("  ");
+  if (tempHour < 10) lcd.print("0");  // Use tempHour
+  lcd.print(tempHour);
+  lcd.print(":");
+  
+  if (blinkState) {
+    lcd.print(">");
+  } else {
+    lcd.print(" ");
+  }
+  
+  lcd.print(" ");
+  if (tempMinute < 10) lcd.print("0");  // Use tempMinute
+  lcd.print(tempMinute);
+  lcd.print("  OK=Save");
+}
+
+void displaySetAlarmHour() {
+  lcd.setCursor(0, 0);
+  lcd.print("Alarm ");
+  lcd.print(selectedAlarm + 1);
+  lcd.print(" Hour:   ");
+  
+  lcd.setCursor(0, 1);
+  if (blinkState) {
+    lcd.print(">");
+  } else {
+    lcd.print(" ");
+  }
+  
+  lcd.print(" ");
+  if (alarms[selectedAlarm].hour < 10) lcd.print("0");
+  lcd.print(alarms[selectedAlarm].hour);
+  lcd.print(":00  OK=Next");
+}
+
+void displaySetAlarmMinute() {
+  lcd.setCursor(0, 0);
+  lcd.print("Alarm ");
+  lcd.print(selectedAlarm + 1);
+  lcd.print(" Min:    ");
+  
+  lcd.setCursor(0, 1);
+  lcd.print("  ");
+  if (alarms[selectedAlarm].hour < 10) lcd.print("0");
+  lcd.print(alarms[selectedAlarm].hour);
+  lcd.print(":");
+  
+  if (blinkState) {
+    lcd.print(">");
+  } else {
+    lcd.print(" ");
+  }
+  
+  lcd.print(" ");
+  if (alarms[selectedAlarm].minute < 10) lcd.print("0");
+  lcd.print(alarms[selectedAlarm].minute);
+  lcd.print("  OK=Next");
+}
+
+void displaySetAlarmOnOff() {
+  lcd.setCursor(0, 0);
+  lcd.print("Alarm ");
+  lcd.print(selectedAlarm + 1);
+  lcd.print(" Status: ");
+  
+  lcd.setCursor(0, 1);
+  if (blinkState) {
+    lcd.print(">");
+  } else {
+    lcd.print(" ");
+  }
+  
+  lcd.print(" ");
+  if (alarms[selectedAlarm].isActive) {
+    lcd.print("ACTIVE   ");
+  } else {
+    lcd.print("INACTIVE ");
+  }
+  lcd.print("OK=Save");
+}
+
+void displayAlarmRinging() {
+  lcd.setCursor(0, 0);
+  lcd.print("MEDICINE REMINDER");
+  
+  lcd.setCursor(0, 1);
+  lcd.print(alarms[selectedAlarm].name);
+  lcd.print(" Time! ");
+}
+
+// --- Main Loop ---
+void loop() {
+  // IMPORTANT: Update time from RTC ONLY in CLOCK_DISPLAY mode
+  // This prevents RTC from overwriting our temporary setting values
+  if (currentMode == CLOCK_DISPLAY || currentMode == ALARM_RINGING) {
+    static unsigned long lastTimeUpdate = 0;
+    if (millis() - lastTimeUpdate >= 1000) {
+      DateTime now = rtc.now();
+      currentHour = now.hour();
+      currentMinute = now.minute();
+      currentSecond = now.second();
+      lastTimeUpdate = millis();
+      
+      // Debug: Show time update in Serial
+      static unsigned long lastSerialPrint = 0;
+      if (millis() - lastSerialPrint >= 5000) {
+        Serial.print("RTC Time: ");
+        Serial.print(currentHour);
+        Serial.print(":");
+        Serial.print(currentMinute);
+        Serial.print(":");
+        Serial.println(currentSecond);
+        lastSerialPrint = millis();
+      }
+    }
+  }
+  
+  // Update blink every 500ms
+  if (millis() - lastBlink >= 500) {
+    blinkState = !blinkState;
+    lastBlink = millis();
+  }
+  
+  // --- Button Handling ---
+  
+  // MODE Button: Enter time setting or stop alarm
+  if (buttonPressed(MODE_BUTTON)) {
+    Serial.println("MODE pressed");
+    
+    if (currentMode == ALARM_RINGING) {
+      currentMode = CLOCK_DISPLAY;
+      digitalWrite(BUZZER_PIN, LOW);
+      Serial.println("Alarm stopped");
+    }
+    else if (currentMode == CLOCK_DISPLAY) {
+      // Enter current time setting mode
+      currentMode = SET_CURRENT_HOUR;
+      // Initialize temp variables with current time
+      tempHour = currentHour;
+      tempMinute = currentMinute;
+      Serial.println("Setting clock hour");
+      Serial.print("Temp hour initialized to: ");
+      Serial.println(tempHour);
+    }
+    else {
+      // Cancel and go back to clock
+      currentMode = CLOCK_DISPLAY;
+      Serial.println("Back to clock (cancelled)");
+    }
+  }
+  
+  // UP Button: Increase value or next alarm
+  if (buttonPressed(UP_BUTTON)) {
+    Serial.println("UP pressed");
+    
+    switch(currentMode) {
+      case CLOCK_DISPLAY:
+        // Cycle alarm slots
+        selectedAlarm = (selectedAlarm + 1) % 3;
+        Serial.print("View Alarm ");
+        Serial.println(selectedAlarm + 1);
+        break;
+        
+      case SET_CURRENT_HOUR:
+        tempHour = (tempHour + 1) % 24;  // Use tempHour
+        Serial.print("Temp Hour: ");
+        Serial.println(tempHour);
+        break;
+        
+      case SET_CURRENT_MINUTE:
+        tempMinute = (tempMinute + 1) % 60;  // Use tempMinute
+        Serial.print("Temp Minute: ");
+        Serial.println(tempMinute);
+        break;
+        
+      case SET_ALARM_HOUR:
+        alarms[selectedAlarm].hour = (alarms[selectedAlarm].hour + 1) % 24;
+        Serial.print("Alarm hour: ");
+        Serial.println(alarms[selectedAlarm].hour);
+        break;
+        
+      case SET_ALARM_MINUTE:
+        alarms[selectedAlarm].minute = (alarms[selectedAlarm].minute + 1) % 60;
+        Serial.print("Alarm minute: ");
+        Serial.println(alarms[selectedAlarm].minute);
+        break;
+        
+      case SET_ALARM_ONOFF:
+        alarms[selectedAlarm].isActive = !alarms[selectedAlarm].isActive;
+        Serial.print("Alarm active: ");
+        Serial.println(alarms[selectedAlarm].isActive);
+        break;
+    }
+  }
+  
+  // DOWN Button: Decrease value or prev alarm
+  if (buttonPressed(DOWN_BUTTON)) {
+    Serial.println("DOWN pressed");
+    
+    switch(currentMode) {
+      case CLOCK_DISPLAY:
+        // Cycle alarm slots
+        selectedAlarm = (selectedAlarm - 1 + 3) % 3;
+        Serial.print("View Alarm ");
+        Serial.println(selectedAlarm + 1);
+        break;
+        
+      case SET_CURRENT_HOUR:
+        tempHour = (tempHour - 1 + 24) % 24;  // Use tempHour
+        Serial.print("Temp Hour: ");
+        Serial.println(tempHour);
+        break;
+        
+      case SET_CURRENT_MINUTE:
+        tempMinute = (tempMinute - 1 + 60) % 60;  // Use tempMinute
+        Serial.print("Temp Minute: ");
+        Serial.println(tempMinute);
+        break;
+        
+      case SET_ALARM_HOUR:
+        alarms[selectedAlarm].hour = (alarms[selectedAlarm].hour - 1 + 24) % 24;
+        Serial.print("Alarm hour: ");
+        Serial.println(alarms[selectedAlarm].hour);
+        break;
+        
+      case SET_ALARM_MINUTE:
+        alarms[selectedAlarm].minute = (alarms[selectedAlarm].minute - 1 + 60) % 60;
+        Serial.print("Alarm minute: ");
+        Serial.println(alarms[selectedAlarm].minute);
+        break;
+        
+      case SET_ALARM_ONOFF:
+        alarms[selectedAlarm].isActive = !alarms[selectedAlarm].isActive;
+        Serial.print("Alarm active: ");
+        Serial.println(alarms[selectedAlarm].isActive);
+        break;
+    }
+  }
+  
+  // OK Button: Confirm/Select
+  if (buttonPressed(OK_BUTTON)) {
+    Serial.println("OK pressed");
+    
+    switch(currentMode) {
+      case CLOCK_DISPLAY:
+        // Start setting selected alarm
+        currentMode = SET_ALARM_HOUR;
+        Serial.print("Set Alarm ");
+        Serial.println(selectedAlarm + 1);
+        break;
+        
+      case SET_CURRENT_HOUR:
+        currentMode = SET_CURRENT_MINUTE;
+        Serial.println("Set minute");
+        break;
+        
+      case SET_CURRENT_MINUTE:
+        // Save current time to RTC
+        rtc.adjust(DateTime(2024, 1, 1, tempHour, tempMinute, 0));
+        
+        // Update current variables
+        currentHour = tempHour;
+        currentMinute = tempMinute;
+        
+        currentMode = CLOCK_DISPLAY;
+        Serial.print("Clock saved to RTC: ");
+        Serial.print(tempHour);
+        Serial.print(":");
+        Serial.println(tempMinute);
+        break;
+        
+      case SET_ALARM_HOUR:
+        currentMode = SET_ALARM_MINUTE;
+        Serial.println("Set alarm minute");
+        break;
+        
+      case SET_ALARM_MINUTE:
+        currentMode = SET_ALARM_ONOFF;
+        Serial.println("Set alarm status");
+        break;
+        
+      case SET_ALARM_ONOFF:
+        currentMode = CLOCK_DISPLAY;
+        Serial.print("Alarm ");
+        Serial.print(selectedAlarm + 1);
+        Serial.println(" saved");
+        break;
+    }
+  }
+  
+  // --- Alarm Check ---
+  if (currentMode != ALARM_RINGING && currentMode != SET_CURRENT_HOUR && 
+      currentMode != SET_CURRENT_MINUTE && currentMode != SET_ALARM_HOUR &&
+      currentMode != SET_ALARM_MINUTE && currentMode != SET_ALARM_ONOFF) {
+    
+    for (int i = 0; i < 3; i++) {
+      if (alarms[i].isActive && 
+          currentHour == alarms[i].hour && 
+          currentMinute == alarms[i].minute && 
+          currentSecond < 10) {
+        
+        selectedAlarm = i;
+        currentMode = ALARM_RINGING;
+        Serial.print("!!! ALARM ");
+        Serial.print(i + 1);
+        Serial.println(" !!!");
+        break;
+      }
+    }
+  }
+  
+  // --- Alarm Ringing ---
+  if (currentMode == ALARM_RINGING) {
+    // Beep pattern
+    if ((millis() / 500) % 2 == 0) {
+      digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+    
+    // Auto-stop after 30 seconds
+    static unsigned long alarmStart = 0;
+    if (alarmStart == 0) alarmStart = millis();
+    
+    if (millis() - alarmStart > 30000) {
+      currentMode = CLOCK_DISPLAY;
+      digitalWrite(BUZZER_PIN, LOW);
+      alarmStart = 0;
+      Serial.println("Alarm auto-stop");
+    }
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+  
+  // --- Update Display ---
+  if (millis() - lastDisplayUpdate >= 200) {
+    lcd.clear();
+    
+    switch(currentMode) {
+      case CLOCK_DISPLAY:
+        displayClock();
+        break;
+      case SET_CURRENT_HOUR:
+        displaySetCurrentHour();
+        break;
+      case SET_CURRENT_MINUTE:
+        displaySetCurrentMinute();
+        break;
+      case SET_ALARM_HOUR:
+        displaySetAlarmHour();
+        break;
+      case SET_ALARM_MINUTE:
+        displaySetAlarmMinute();
+        break;
+      case SET_ALARM_ONOFF:
+        displaySetAlarmOnOff();
+        break;
+      case ALARM_RINGING:
+        displayAlarmRinging();
+        break;
+    }
+    
+    lastDisplayUpdate = millis();
+  }
+  
+  delay(100);
+}
