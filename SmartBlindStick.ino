@@ -214,7 +214,7 @@ void readGsmForTrackCommand() {
       Serial.println("INSIDE track");
       gsmSerial.println("AT+CMGF=1");
       delay(1000);
-      gsmSerial.println("AT+CMGS=\"+917019415675\"\r");
+      gsmSerial.println("AT+CMGS=\"your number\"\r");
       delay(1000);
       p = get_gps();
 
@@ -240,7 +240,7 @@ void readGsmForTrackCommand() {
 void SendMessage() {
   gsmSerial.println("AT+CMGF=1");
   delay(500);
-  gsmSerial.println("AT+CMGS=\"+917019415675\"\r"); //7019415675
+  gsmSerial.println("AT+CMGS=\"+91"your number"\"\r"); //
   delay(500);
 
   gsmSerial.print("I Am In Problem Plz Help Me. My Location: ");
