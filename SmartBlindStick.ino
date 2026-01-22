@@ -214,7 +214,7 @@ void readGsmForTrackCommand() {
       Serial.println("INSIDE track");
       gsmSerial.println("AT+CMGF=1");
       delay(1000);
-      gsmSerial.println("AT+CMGS=\"your number\"\r");
+      gsmSerial.println("AT+CMGS=\"+91your number\"\r");//+91 or your countrycode is mandatory
       delay(1000);
       p = get_gps();
 
