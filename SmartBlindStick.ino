@@ -13,8 +13,8 @@ const int echoPin1 = A1;
 const int trigPin2 = A4;
 const int echoPin2 = A3;
 
-float demoLatitude = 18.5849324;
-float demoLongitude = 73.6553194;
+float demoLatitude = 18.5849324;//your lattitude address
+float demoLongitude = 73.6553194;//your longitude address
 
 bool gpsFixAvailable = false;
 bool demoSent = false;
