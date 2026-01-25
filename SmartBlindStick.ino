@@ -253,7 +253,7 @@ void SendMessage() {
     gsmSerial.print(",");
     gsmSerial.print(*(p + 1), 6);
   } else {
-    gsmSerial.print("GPS signal not available.");
+    gsmSerial.print("GPS signal not available.");//if gps could not detect the location
   }
 
   delay(500);
