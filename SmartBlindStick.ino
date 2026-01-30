@@ -237,7 +237,7 @@ void readGsmForTrackCommand() {
   }
 }
 
-void SendMessage() {
+void SendMessage() { //MESSAGE SECTION
   gsmSerial.println("AT+CMGF=1");
   delay(500);
   gsmSerial.println("AT+CMGS=\"+91your number"\"\r"); //+91 or your countrycode is mandatory
