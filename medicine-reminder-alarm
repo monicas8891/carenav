@@ -1,5 +1,5 @@
 // Required Libraries
-#include <Wire.h>
+#include <Wire.h> //available in arduino ide
 #include <RTClib.h>
 #include <LiquidCrystal_I2C.h>
 
