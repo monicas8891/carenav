@@ -1,6 +1,6 @@
 // Required Libraries
 #include <Wire.h> //available in arduino ide
-#include <RTClib.h>
+#include <RTClib.h> //available in arduino ide
 #include <LiquidCrystal_I2C.h>
 
 // --- Hardware Definitions ---
