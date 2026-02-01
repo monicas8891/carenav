@@ -1,7 +1,7 @@
 // Required Libraries
 #include <Wire.h> //available in arduino ide
 #include <RTClib.h> //available in arduino ide
-#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal_I2C.h> //available in arduino ide
 
 // --- Hardware Definitions ---
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // Try 0x3F if 0x27 doesn't work
