@@ -8,10 +8,10 @@ SoftwareSerial gpsSerial(10, 11);
 SoftwareSerial gsmSerial(2, 3);
 TinyGPSPlus gps;
 
-const int trigPin1 = A2;
-const int echoPin1 = A1;
-const int trigPin2 = A4;
-const int echoPin2 = A3;
+const int trigPin1 =A2;
+const int echoPin1 =A1;
+const int trigPin2 =A4;
+const int echoPin2 =A3;
 
 float demoLatitude = 18.5849324;//your lattitude address if gsm could not find the location
 float demoLongitude = 73.6553194;//your longitude address if gsm could not find the location
