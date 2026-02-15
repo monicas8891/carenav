@@ -72,9 +72,11 @@ void loop()
   handleBuzzerPattern();
   checkRainSensorAndAlert();
 
-  if (digitalRead(BUTTON_PIN) == LOW) {
+  if (digitalRead(BUTTON_PIN) == LOW) 
+  {
     delay(50); // debounce
-    if (digitalRead(BUTTON_PIN) == LOW) {
+    if (digitalRead(BUTTON_PIN) == LOW)
+    {
       Serial.println("button pressed");
       SendMessage();
       delay(200);
