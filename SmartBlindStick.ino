@@ -86,7 +86,8 @@ void loop()
   readGsmForTrackCommand();
 }
 
-void measureUltrasonicDistances() {
+void measureUltrasonicDistances() 
+{
   digitalWrite(trigPin1, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin1, HIGH);
