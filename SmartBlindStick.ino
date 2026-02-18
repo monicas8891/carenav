@@ -80,8 +80,7 @@ void loop()
       delay(200);
     }
   }
-
-  readGsmForTrackCommand();
+ readGsmForTrackCommand();
 }
 
 void measureUltrasonicDistances() 
