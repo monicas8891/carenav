@@ -138,10 +138,8 @@ void handleBuzzerPattern() {
     digitalWrite(BUZZER_PIN, LOW);
     return;
   }
-
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - buzzerTimer >= buzzerInterval) {
+ unsigned long currentMillis = millis();
+ if (currentMillis - buzzerTimer >= buzzerInterval) {
     buzzerTimer = currentMillis;
     buzzerState = !buzzerState;
     digitalWrite(BUZZER_PIN, buzzerState);
